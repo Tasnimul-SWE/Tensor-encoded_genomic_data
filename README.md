@@ -20,7 +20,6 @@ The following libraries and frameworks are required to run the code:
 - Pandas==1.3.5
 - Matplotlib==3.5.3
 - scikit-learn==1.0.2
-- imbalanced-learn==0.9.1
 
 Ensure the appropriate versions of CUDA and cuDNN are installed for GPU support.
 
