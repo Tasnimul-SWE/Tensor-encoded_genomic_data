@@ -95,7 +95,7 @@ if __name__ == "__main__":
     model = EnhancedTTConvModel(input_channels=num_channels, num_labels=10)
 
     # 2) Load best weights
-    model.load_state_dict(torch.load('best_model_latest_tt.pth'))
+    model.load_state_dict(torch.load('best_model_latest.pth'))
     model.eval()
 
     # 3) Get a small batch from the test_loader
