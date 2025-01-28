@@ -33,7 +33,6 @@ This script includes the following steps:
    - Filters valid genomic variants based on base substitutions.
    - Maps variant classifications and base substitutions to one-hot vectors.
    - Constructs a 4D tensor representing samples with genomic features.
-   - Handles class imbalance using `RandomOverSampler`.
 
 2. **Model Architecture**:
    - Incorporates CBAM for channel and spatial attention.
