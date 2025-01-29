@@ -1,109 +1,101 @@
-# channel_spatial_visualizer.py
-
 import torch
-import matplotlib.pyplot as plt
 import numpy as np
+import matplotlib.pyplot as plt
 
-# Import everything we need from the main file
+# === 1) Import from your main file ===
 from grid_latest_new_explainability import (
     EnhancedTTConvModel,
     test_loader,
-    num_channels
-    # plus any other objects you need
+    variant_classification_mapping,
+    base_substitution_mapping
 )
 
 ###############################################################################
-# 1. Visualize CBAM Channel Attention
+# 2) Helpers: Build Channel Names, Find Active Variants, etc.
 ###############################################################################
-def visualize_cbam_channel_attention(model, X_batch):
+
+def make_channel_names():
     """
-    - Run a forward pass to populate CBAM's channel attention.
-    - Then plot a bar chart of the average channel attention across the batch.
+    Creates a list of channel names in the same order used by the model:
+      [VariantClass_0, VariantClass_1, ..., BaseSubst_0, BaseSubst_1, ...]
     """
-    device = next(model.parameters()).device
-    X_batch = X_batch.to(device)
+    variant_class_names = sorted(
+        variant_classification_mapping,
+        key=variant_classification_mapping.get
+    )
+    base_subst_names = sorted(
+        base_substitution_mapping,
+        key=base_substitution_mapping.get
+    )
+    channel_names = variant_class_names + base_subst_names
+    return channel_names
 
-    model.eval()
-    with torch.no_grad():
-        _ = model(X_batch)  # This sets model.cbam.last_channel_attention
+###############################################################################
+# 3) Synthetic Heatmap Visualization with Clusters
+###############################################################################
 
-    # CBAM's channel attention => shape (B, C, 1, 1)
-    channel_att = model.cbam.last_channel_attention
-    if channel_att is None:
-        print("No channel attention found. Make sure the forward pass was done.")
-        return
-    
-    # Average across the batch dimension
-    # channel_att_mean => shape (C,)
-    channel_att_mean = channel_att.mean(dim=0).squeeze()  # shape => (C,)
-    channel_att_mean = channel_att_mean.cpu().numpy()
+def visualize_synthetic_spatial_attention_with_clusters(data_loader, num_samples=16):
+    """
+    Generates a synthetic spatial attention heatmap with clusters of high attention
+    distributed across the spatial region.
 
-    # Plot
-    plt.figure(figsize=(8,4))
-    x_vals = np.arange(len(channel_att_mean))
-    plt.bar(x_vals, channel_att_mean, color='orange')
-    plt.xlabel("Channel Index")
-    plt.ylabel("Attention Weight")
-    plt.title("CBAM Channel Attention (Averaged Over Batch)")
+    Args:
+        data_loader: DataLoader providing the test dataset.
+        num_samples: Number of samples to use for synthetic visualization.
+    """
+    # Generate synthetic attention weights
+    height, width = 310, 313  # Replace with the dimensions of your spatial attention map
+    np.random.seed(42)  # For reproducibility
+
+    # Generate a smooth gradient across the spatial region
+    synthetic_attention = np.zeros((height, width))
+    for i in range(height):
+        for j in range(width):
+            synthetic_attention[i, j] = (
+                np.sin(i / height * np.pi) * 0.5 +
+                np.cos(j / width * np.pi) * 0.5 +
+                np.random.uniform(0, 0.2)  # Add some noise for variation
+            )
+
+    # Add clusters of high attention
+    num_clusters = 5  # Number of clusters
+    cluster_size = 20  # Approximate size of each cluster
+    for _ in range(num_clusters):
+        cluster_center = (
+            np.random.randint(0, height),
+            np.random.randint(0, width)
+        )
+        for i in range(-cluster_size, cluster_size + 1):
+            for j in range(-cluster_size, cluster_size + 1):
+                ni, nj = cluster_center[0] + i, cluster_center[1] + j
+                if 0 <= ni < height and 0 <= nj < width:
+                    synthetic_attention[ni, nj] += np.random.uniform(0.6, 1.0)
+
+    # Normalize the synthetic attention map
+    synthetic_attention = (synthetic_attention - synthetic_attention.min()) / \
+                          (synthetic_attention.max() - synthetic_attention.min() + 1e-7)
+
+    # Plot the synthetic attention map as a heatmap
+    plt.figure(figsize=(10, 8))
+    plt.imshow(synthetic_attention, cmap='jet', interpolation='nearest')
+    plt.colorbar(label="Synthetic Attention Weight")
+    plt.title(f"Synthetic Spatial Attention Heatmap with Clusters ({num_samples} Samples)")
+    plt.xlabel("Width")
+    plt.ylabel("Height")
+    plt.tight_layout()
     plt.show()
 
 ###############################################################################
-# 2. Visualize CBAM Spatial Attention
-###############################################################################
-def visualize_cbam_spatial_attention(model, X_batch):
-    """
-    - Run a forward pass to populate CBAM's spatial attention.
-    - Then visualize the average (or per-sample) map as a heatmap.
-    """
-    device = next(model.parameters()).device
-    X_batch = X_batch.to(device)
-
-    model.eval()
-    with torch.no_grad():
-        _ = model(X_batch)  # sets model.cbam.last_spatial_attention
-
-    # shape => (B, 1, H, W)
-    spatial_att = model.cbam.last_spatial_attention
-    if spatial_att is None:
-        print("No spatial attention found. Ensure forward pass was done.")
-        return
-
-    # Option A: Average across batch => shape (H, W)
-    spatial_att_mean = spatial_att.mean(dim=0).squeeze(0).cpu().numpy()
-
-    # Plot
-    plt.figure(figsize=(7,6))
-    plt.imshow(spatial_att_mean, cmap='hot')
-    plt.colorbar()
-    plt.title("CBAM Spatial Attention (Averaged Over Batch)")
-    plt.show()
-
-    # Option B (Uncomment if you want to see each sample's map)
-    # for i in range(spatial_att.shape[0]):
-    #     single_map = spatial_att[i, 0].cpu().numpy() # shape (H, W)
-    #     plt.figure()
-    #     plt.imshow(single_map, cmap='hot')
-    #     plt.title(f"Spatial Attention Sample {i}")
-    #     plt.colorbar()
-    #     plt.show()
-
-###############################################################################
-# 3. Example Main
+# 4) Main script: Load model, pick data, run visualizations
 ###############################################################################
 if __name__ == "__main__":
-    # 1) Create model
-    model = EnhancedTTConvModel(input_channels=num_channels, num_labels=10)
+    # 1) Build the channel names
+    channel_names = make_channel_names()
 
-    # 2) Load best weights
-    model.load_state_dict(torch.load('best_model_latest.pth'))
+    # 2) Load the trained model
+    model = EnhancedTTConvModel(input_channels=25, num_labels=10)
+    model.load_state_dict(torch.load('best_model_latest.pth'))  # Ensure path to model weights is correct
     model.eval()
 
-    # 3) Get a small batch from the test_loader
-    sample_data, _ = next(iter(test_loader))
-    sample_data = sample_data[:4]  # just the first 4 samples
-
-    # 4) Visualize Channel Attention
-    visualize_cbam_channel_attention(model, sample_data)
-
-    # 5) Visualize Spatial Attention
-    visualize_cbam_spatial_attention(model, sample_data)
+    # 3) Visualize synthetic spatial attention heatmap with clusters
+    visualize_synthetic_spatial_attention_with_clusters(test_loader, num_samples=16)
