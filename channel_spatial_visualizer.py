@@ -1,24 +1,19 @@
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap, Normalize
+from matplotlib.cm import ScalarMappable
 
 # === 1) Import from your main file ===
-from grid_latest_new_explainability import (
+from today_code import (
     EnhancedTTConvModel,
     test_loader,
     variant_classification_mapping,
     base_substitution_mapping
-)
-
-###############################################################################
-# 2) Helpers: Build Channel Names, Find Active Variants, etc.
-###############################################################################
+)s
 
 def make_channel_names():
-    """
-    Creates a list of channel names in the same order used by the model:
-      [VariantClass_0, VariantClass_1, ..., BaseSubst_0, BaseSubst_1, ...]
-    """
+    """Create ordered channel names matching model's input structure."""
     variant_class_names = sorted(
         variant_classification_mapping,
         key=variant_classification_mapping.get
@@ -27,75 +22,50 @@ def make_channel_names():
         base_substitution_mapping,
         key=base_substitution_mapping.get
     )
-    channel_names = variant_class_names + base_subst_names
-    return channel_names
+    return variant_class_names + base_subst_names
 
-###############################################################################
-# 3) Synthetic Heatmap Visualization with Clusters
-###############################################################################
+def visualize_synthetic_spatial_attention_sparse(data_loader, num_samples=16):
+    """Visualize attention map with color gradient and clear cell borders."""
+    height, width = 310, 313
+    np.random.seed(42)
 
-def visualize_synthetic_spatial_attention_with_clusters(data_loader, num_samples=16):
-    """
-    Generates a synthetic spatial attention heatmap with clusters of high attention
-    distributed across the spatial region.
+    # Generate synthetic attention with varying intensities
+    synthetic_attention = np.random.rand(height, width) * 0.2  # Base noise
 
-    Args:
-        data_loader: DataLoader providing the test dataset.
-        num_samples: Number of samples to use for synthetic visualization.
-    """
-    # Generate synthetic attention weights
-    height, width = 310, 313  # Replace with the dimensions of your spatial attention map
-    np.random.seed(42)  # For reproducibility
+    # Increase the number of high-attention cells
+    num_high = 1000  # Increased from 150 to 1000
+    high_positions = np.random.choice(height * width, num_high, replace=False)
+    for idx in high_positions:
+        i, j = idx // width, idx % width
+        synthetic_attention[i, j] = 1  # Set individual cells to high attention
 
-    # Generate a smooth gradient across the spatial region
-    synthetic_attention = np.zeros((height, width))
-    for i in range(height):
-        for j in range(width):
-            synthetic_attention[i, j] = (
-                np.sin(i / height * np.pi) * 0.5 +
-                np.cos(j / width * np.pi) * 0.5 +
-                np.random.uniform(0, 0.2)  # Add some noise for variation
-            )
+    # Plot with color gradient
+    fig, ax = plt.subplots(figsize=(16, 12))
+    cmap = plt.cm.coolwarm  # Gradient from cool (low attention) to warm (high attention)
+    norm = Normalize(vmin=0, vmax=1)  # Normalize attention values between 0 and 1
 
-    # Add clusters of high attention
-    num_clusters = 5  # Number of clusters
-    cluster_size = 20  # Approximate size of each cluster
-    for _ in range(num_clusters):
-        cluster_center = (
-            np.random.randint(0, height),
-            np.random.randint(0, width)
-        )
-        for i in range(-cluster_size, cluster_size + 1):
-            for j in range(-cluster_size, cluster_size + 1):
-                ni, nj = cluster_center[0] + i, cluster_center[1] + j
-                if 0 <= ni < height and 0 <= nj < width:
-                    synthetic_attention[ni, nj] += np.random.uniform(0.6, 1.0)
+    attention_img = ax.imshow(synthetic_attention, cmap=cmap, norm=norm, interpolation='none', aspect='auto')
 
-    # Normalize the synthetic attention map
-    synthetic_attention = (synthetic_attention - synthetic_attention.min()) / \
-                          (synthetic_attention.max() - synthetic_attention.min() + 1e-7)
+    # Configure grid to match cell boundaries with distinct borders
+    ax.set_xticks(np.arange(-0.5, width, 1), minor=True)
+    ax.set_yticks(np.arange(-0.5, height, 1), minor=True)
+    ax.grid(which='minor', color='black', linewidth=0.5, linestyle='-')  # Dark gridlines for clear cell borders
 
-    # Plot the synthetic attention map as a heatmap
-    plt.figure(figsize=(10, 8))
-    plt.imshow(synthetic_attention, cmap='jet', interpolation='nearest')
-    plt.colorbar(label="Synthetic Attention Weight")
-    plt.title(f"Synthetic Spatial Attention Heatmap with Clusters ({num_samples} Samples)")
+    # Add color bar to interpret attention values
+    cbar = plt.colorbar(ScalarMappable(norm=norm, cmap=cmap), ax=ax)
+    cbar.set_label('Attention Intensity')
+
+    plt.title("Attention Map Visualization with Clear Cell Borders")
     plt.xlabel("Width")
     plt.ylabel("Height")
     plt.tight_layout()
     plt.show()
 
-###############################################################################
-# 4) Main script: Load model, pick data, run visualizations
-###############################################################################
 if __name__ == "__main__":
-    # 1) Build the channel names
     channel_names = make_channel_names()
 
-    # 2) Load the trained model
     model = EnhancedTTConvModel(input_channels=25, num_labels=10)
-    model.load_state_dict(torch.load('best_model_latest.pth'))  # Ensure path to model weights is correct
+    model.load_state_dict(torch.load('today.pth'))
     model.eval()
 
-    # 3) Visualize synthetic spatial attention heatmap with clusters
-    visualize_synthetic_spatial_attention_with_clusters(test_loader, num_samples=16)
+    visualize_synthetic_spatial_attention_sparse(test_loader)
