@@ -90,9 +90,6 @@ This script visualizes the learned attention maps from the CBAM module:
 
 ---
 
-## Results
-- The trained model achieves effective multi-label classification of genomic data.
-- Attention visualizations provide insights into the model's decision-making process.
 
 
 ## Architecture
