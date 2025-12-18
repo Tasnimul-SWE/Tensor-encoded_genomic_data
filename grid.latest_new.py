@@ -10,9 +10,8 @@ from torch.utils.data import DataLoader, TensorDataset
 from sklearn.model_selection import train_test_split
 from imblearn.over_sampling import RandomOverSampler
 
-###############################################################################
+
 # 1. Read and preprocess the data
-###############################################################################
 file_path = 'integrated_data_filtered_distributed_labels.csv'
 data = pd.read_csv(file_path)
 
@@ -106,9 +105,9 @@ test_dataset = TensorDataset(X_test_tensor, y_test_tensor)
 train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
 test_loader = DataLoader(test_dataset, batch_size=16, shuffle=False)
 
-###############################################################################
+
 # 2. Define CBAM Module
-###############################################################################
+
 class CBAM(nn.Module):
     def __init__(self, input_channels, reduction_ratio=16, kernel_size=7):
         super(CBAM, self).__init__()
@@ -146,9 +145,8 @@ class CBAM(nn.Module):
         x = x * spatial_attention
         return x
 
-###############################################################################
 # 3. Define TTConv Layers and Enhanced Model
-###############################################################################
+
 class TTConvLayer(nn.Module):
     """
     A placeholder for a TT-based convolution approach.
@@ -203,14 +201,14 @@ class EnhancedTTConvModel(nn.Module):
     def __init__(self, input_channels=25, num_labels=10):
         super(EnhancedTTConvModel, self).__init__()
         
-        #######################################################################
+        
         # 1) CBAM
-        #######################################################################
+       
         self.cbam = CBAM(input_channels)
         
-        #######################################################################
+        
         # 2) TTConv layers: both produce 25 channels, higher TT rank => bigger capacity
-        #######################################################################
+        
         self.tt_conv1 = TTConvLayer(
             window=[3, 3],
             inp_ch_modes=[5, 5],      # 25 input channels
@@ -224,14 +222,14 @@ class EnhancedTTConvModel(nn.Module):
             ranks=[4, 4]
         )
         
-        #######################################################################
+        
         # 3) Global Max Pool
-        #######################################################################
+        
         self.global_pool = nn.AdaptiveMaxPool2d((1,1))
         
-        #######################################################################
+        
         # 4) Final MLP: (25 -> 128 -> 64 -> 10) with dropout=0.3
-        #######################################################################
+        
         self.final_layers = nn.Sequential(
             nn.Linear(25, 128),
             nn.ReLU(),
@@ -272,9 +270,9 @@ class EnhancedTTConvModel(nn.Module):
         x = self.final_layers(x)
         return x
 
-###############################################################################
+
 # 4. Train and Evaluate the Model
-###############################################################################
+
 def train_model(model, train_loader, test_loader, num_epochs=200):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
@@ -362,11 +360,12 @@ def test_model(model, test_loader):
     print(f"Test Accuracy: {test_accuracy:.4f}")
     return test_accuracy
 
-###############################################################################
+
 # Main
-###############################################################################
+
 if __name__ == "__main__":
     model = EnhancedTTConvModel(input_channels=num_channels, num_labels=10)
     train_model(model, train_loader, test_loader, num_epochs=200)
     model.load_state_dict(torch.load('best_model_latest.pth'))
     test_model(model, test_loader)
+
