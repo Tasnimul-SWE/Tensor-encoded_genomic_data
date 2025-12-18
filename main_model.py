@@ -11,9 +11,9 @@ from torch.utils.data import DataLoader, TensorDataset
 from sklearn.model_selection import train_test_split
 from imblearn.over_sampling import RandomOverSampler
 
-###############################################################################
+
 # 1. Read and preprocess the data
-###############################################################################
+
 file_path = 'integrated_data_filtered_distributed_labels.csv'
 data = pd.read_csv(file_path)
 
@@ -107,9 +107,9 @@ test_dataset = TensorDataset(X_test_tensor, y_test_tensor)
 train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
 test_loader = DataLoader(test_dataset, batch_size=16, shuffle=False)
 
-###############################################################################
+
 # 2. Define CBAM Module (with saved attention maps)
-###############################################################################
+
 class CBAM(nn.Module):
     def __init__(self, input_channels, reduction_ratio=16, kernel_size=7):
         super(CBAM, self).__init__()
@@ -156,9 +156,9 @@ class CBAM(nn.Module):
         x = x * spatial_attention
         return x
 
-###############################################################################
+
 # 3. Define a pseudo "TTConv" layer (actually uses standard conv + mixing)
-###############################################################################
+
 class TTConvLayer(nn.Module):
     def __init__(self, window, inp_ch_modes, out_ch_modes, ranks, stride=1, padding='same'):
         super(TTConvLayer, self).__init__()
@@ -211,21 +211,21 @@ class TTConvLayer(nn.Module):
         x = x.permute(0, 2, 3, 1)  # => (B, H_out, W_out, out_c)
         return x
 
-###############################################################################
+
 # 4. Define the Enhanced TTConv Model with attention merging
-###############################################################################
+
 class EnhancedTTConvModel(nn.Module):
     def __init__(self, input_channels=25, num_labels=10):
         super(EnhancedTTConvModel, self).__init__()
         
-        #######################################################################
+       
         # 1) CBAM
-        #######################################################################
+       
         self.cbam = CBAM(input_channels)
         
-        #######################################################################
+        
         # 2) Two TTConv layers
-        #######################################################################
+        
         self.tt_conv1 = TTConvLayer(
             window=[3, 3],
             inp_ch_modes=[5, 5],
@@ -239,9 +239,9 @@ class EnhancedTTConvModel(nn.Module):
             ranks=[4, 4]
         )
         
-        #######################################################################
+        
         # 3) Global Max Pool & final MLP
-        #######################################################################
+        
         self.global_pool = nn.AdaptiveMaxPool2d((1,1))
         self.final_layers = nn.Sequential(
             nn.Linear(25, 128),
@@ -292,13 +292,7 @@ class EnhancedTTConvModel(nn.Module):
         return x
 
     def get_merged_attention(self, merge_mode='sum'):
-        """
-        Merge CBAM's spatial attention with the TTConv "core" attention to produce a single map.
-        We'll do a simplified approach:
-          - average across batch dimension for the CBAM spatial map,
-          - sum or average the TTConv "core" attentions,
-          - combine them with a sum or product.
-        """
+        
         # 1) Retrieve CBAM's last spatial attention
         cbam_spatial = self.cbam.last_spatial_attention  # shape: (B, 1, H, W)
         if cbam_spatial is None or len(self.tt_att_maps) == 0:
@@ -335,9 +329,9 @@ class EnhancedTTConvModel(nn.Module):
         
         return merged_map.squeeze(0).detach().cpu().numpy()
 
-###############################################################################
+
 # 5. Train & evaluate
-###############################################################################
+
 def train_model(model, train_loader, test_loader, num_epochs=200):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
@@ -419,9 +413,7 @@ def test_model(model, test_loader):
     print(f"Test Accuracy: {test_accuracy:.4f}")
     return test_accuracy
 
-###############################################################################
 # 6. Visualization of merged attention
-###############################################################################
 def visualize_merged_attention(model, sample_batch):
     """
     1) Forward pass -> generate CBAM + TTConv attention.
@@ -448,9 +440,9 @@ def visualize_merged_attention(model, sample_batch):
     plt.show()
 
 
-###############################################################################
+
 # Main
-###############################################################################
+
 if __name__ == "__main__":
     model = EnhancedTTConvModel(input_channels=num_channels, num_labels=10)
     train_model(model, train_loader, test_loader, num_epochs=200)
@@ -462,4 +454,5 @@ if __name__ == "__main__":
     # Visualize attention on a small sample batch
     sample_data, _ = next(iter(test_loader))  # get a single batch
     sample_data = sample_data[:4]            # pick first 4 samples for demonstration
+
     visualize_merged_attention(model, sample_data)
