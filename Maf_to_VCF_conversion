@@ -119,3 +119,25 @@ for variant in vcf:
 for sample, count in variant_counts.items():
     print(f"{sample}: {count} variants")
 
+# convert to table
+
+import pandas as pd
+
+df_counts = pd.DataFrame(
+    variant_counts.items(),
+    columns=["Sample", "Num_Variants"]
+).sort_values("Num_Variants", ascending=False)
+
+df_counts
+# visualize
+
+import matplotlib.pyplot as plt
+
+plt.figure(figsize=(10,4))
+plt.bar(df_counts["Sample"], df_counts["Num_Variants"])
+plt.xticks(rotation=90)
+plt.ylabel("Number of Variants")
+plt.title("Variant Count per Sample")
+plt.tight_layout()
+plt.show()
+
