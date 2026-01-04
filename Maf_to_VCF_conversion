@@ -90,3 +90,32 @@ with open(VCF_OUT, "w") as f:
     f.write("\n".join(vcf_lines))
 
 print(f"Multi-sample VCF written to: {VCF_OUT}")
+
+
+#analyze VCF
+
+from cyvcf2 import VCF
+from collections import defaultdict
+
+# Load VCF
+vcf = VCF("multi_sample_somatic_GRCh38.vcf")
+
+# Get sample names
+samples = vcf.samples
+
+# Dictionary to store counts
+variant_counts = defaultdict(int)
+
+# Iterate over variants
+for variant in vcf:
+    for i, sample in enumerate(samples):
+        gt = variant.genotypes[i]  # [allele1, allele2, phased]
+        
+        # ALT present if genotype contains 1
+        if 1 in gt[:2]:
+            variant_counts[sample] += 1
+
+# Print results
+for sample, count in variant_counts.items():
+    print(f"{sample}: {count} variants")
+
