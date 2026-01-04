@@ -1,0 +1,92 @@
+import pandas as pd
+
+
+# Input / Output paths
+
+CSV_FILE = "converted_data_full_with_depth.csv"
+VCF_OUT  = "multi_sample_somatic_GRCh38.vcf"
+
+# Load data
+
+df = pd.read_csv(CSV_FILE)
+
+# Sort for reproducible VCF ordering
+df = df.sort_values(
+    ["Chromosome", "Start_Position", "Tumor_Sample_Barcode"]
+)
+
+# Get all unique samples
+samples = df["Tumor_Sample_Barcode"].unique().tolist()
+
+
+# Build VCF header
+
+vcf_lines = []
+
+vcf_lines.append("##fileformat=VCFv4.2")
+vcf_lines.append("##reference=GRCh38")
+vcf_lines.append('##INFO=<ID=GENE,Number=1,Type=String,Description="Gene symbol">')
+vcf_lines.append('##INFO=<ID=VARCLASS,Number=1,Type=String,Description="Variant classification">')
+vcf_lines.append('##INFO=<ID=CSQ,Number=1,Type=String,Description="Functional consequence">')
+vcf_lines.append('##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">')
+vcf_lines.append('##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Allelic depths">')
+vcf_lines.append('##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Read depth">')
+
+header_cols = [
+    "#CHROM", "POS", "ID", "REF", "ALT",
+    "QUAL", "FILTER", "INFO", "FORMAT"
+] + samples
+
+vcf_lines.append("\t".join(header_cols))
+
+# =========================
+# Group by variant
+# =========================
+grouped = df.groupby(
+    ["Chromosome", "Start_Position", "Reference_Allele", "Tumor_Seq_Allele2"]
+)
+
+for (chrom, pos, ref, alt), g in grouped:
+
+    # INFO field
+    gene = g.iloc[0]["Hugo_Symbol"]
+    varclass = g.iloc[0]["Variant_Classification"]
+    csq = g.iloc[0]["Consequence"]
+
+    info = f"GENE={gene};VARCLASS={varclass};CSQ={csq}"
+
+    rsid = g.iloc[0]["dbSNP_RS"]
+    rsid = rsid if pd.notna(rsid) else "."
+
+    row = [
+        str(chrom),
+        str(int(pos)),
+        rsid,
+        ref,
+        alt,
+        ".",
+        "PASS",
+        info,
+        "GT:AD:DP"
+    ]
+
+    # Initialize all samples as missing
+    sample_data = {s: "./.:.:." for s in samples}
+
+    # Fill in samples where variant is present
+    for _, r in g.iterrows():
+        gt = "0/1" if r["t_alt_count"] > 0 else "0/0"
+        ad = f"{int(r['t_ref_count'])},{int(r['t_alt_count'])}"
+        dp = str(int(r["t_depth"]))
+
+        sample_data[r["Tumor_Sample_Barcode"]] = f"{gt}:{ad}:{dp}"
+
+    row.extend(sample_data[s] for s in samples)
+    vcf_lines.append("\t".join(row))
+
+# Write VCF
+
+with open(VCF_OUT, "w") as f:
+    f.write("\n".join(vcf_lines))
+
+print(f"Multi-sample VCF written to: {VCF_OUT}")
