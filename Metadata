@@ -1,0 +1,22 @@
+
+import pandas as pd
+
+# load file
+df = pd.read_csv("converted_data_full_with_depth.csv")
+
+# get unique sample names
+samples = df["Tumor_Sample_Barcode"].dropna().unique()
+
+rows = []
+for s in samples:
+    parts = s.split("_")
+    state = parts[0]              # Aggressive / Indolent
+    cancer_type = parts[1]        # Prostate / Breast / etc.
+    rows.append([s, cancer_type, state])
+
+meta = pd.DataFrame(rows, columns=["sample_id", "cancer_type", "state"])
+meta.to_csv("sample_metadata.tsv", sep="\t", index=False)
+
+print("Created sample_metadata.tsv with", meta.shape[0], "samples")
+print(meta.head())
+
